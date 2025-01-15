@@ -291,7 +291,7 @@ def generate_swift_buffers(swift_choices, device="cuda"):
     return swift_buffers
 
 
-def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key_values_data, current_length_data, logits_processor=None):
+def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key_values_data, current_length_data, logits_processor=None, pixel_values=None):
     """
     Initializes the swift structure for a given model.
 
@@ -314,7 +314,7 @@ def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key
     """
     with torch.inference_mode():
         # Pass input through the base model
-        outputs, logits = swift_verify(model, input_ids, past_key_values=past_key_values)
+        outputs, logits = swift_verify(model, input_ids, past_key_values=past_key_values, pixel_values=pixel_values)
         # Obtain the logits from the full model
         if logits_processor is not None:
             last_logits = logits[:, -1]
@@ -341,6 +341,7 @@ def swift_verify(
         input_ids=None,
         past_key_values=None,
         position_ids=None,
+        pixel_values=None,
 ):
     """
     Verify the swift structure using the provided model and input.
@@ -357,12 +358,21 @@ def swift_verify(
     """
     with torch.inference_mode():
         # Pass input through the base model
-        outputs = model.model(
-            input_ids=input_ids,
-            attention_mask=None,
-            past_key_values=past_key_values,
-            position_ids=position_ids,
-        )
+        if pixel_values is not None:
+            outputs = model(
+                input_ids=input_ids,
+                attention_mask=None,
+                past_key_values=past_key_values,
+                position_ids=position_ids,
+                pixel_values=pixel_values,
+            )
+        else:
+            outputs = model.model(
+                input_ids=input_ids,
+                attention_mask=None,
+                past_key_values=past_key_values,
+                position_ids=position_ids,
+            )
         orig = model.lm_head(outputs[0])
 
     return outputs, orig
@@ -414,6 +424,7 @@ def swift_draft(
         max_step_draft=25,
         logits_processor=None,
         stop_threshold=0.8,
+        pixel_values=None,
 ):
     """
     Draft new tokens using the swift structure.
@@ -444,12 +455,21 @@ def swift_draft(
     with torch.inference_mode():
         for step_draft in range(max_step_draft):
             with model.self_draft():
-                draft_outputs = model.model(
-                    input_ids=input_ids,
-                    attention_mask=None,
-                    past_key_values=draft_past_key_values,
-                    position_ids=position_ids,
-                )
+                if pixel_values is not None:
+                    draft_outputs = model(
+                        input_ids=input_ids,
+                        attention_mask=None,
+                        past_key_values=draft_past_key_values,
+                        position_ids=position_ids,
+                        pixel_values=pixel_values,
+                    )
+                else:
+                    draft_outputs = model.model(
+                        input_ids=input_ids,
+                        attention_mask=None,
+                        past_key_values=draft_past_key_values,
+                        position_ids=position_ids,
+                    )
             current_draft_logits = model.lm_head(draft_outputs[0])
             if logits_processor is not None:
                 topk_index, topk_prob, op = sample(current_draft_logits, logits_processor, k=TOPK)
@@ -562,6 +582,7 @@ def tree_decoding(
         swift_position_ids,
         input_ids,
         retrieve_indices,
+        pixel_values=None,
 ):
     """
     Decode the tree candidates using the provided model and reorganize the logits.
@@ -587,6 +608,7 @@ def tree_decoding(
         tree_candidates,
         past_key_values=past_key_values,
         position_ids=position_ids,
+        pixel_values=pixel_values,
     )
 
     # Reorder the obtained logits and hidden states based on the retrieve_indices to ensure consistency with some reference ordering.
@@ -777,7 +799,7 @@ def layer_random_search(num_skip_layers=34, num_hidden_layers=40):
 
 
 def swift_optimization(model, output_ids, input_past_key_values_data,
-            input_current_length_data, new_token_num, statistics, optimizer=None, utility=None, position_ids=None):
+            input_current_length_data, new_token_num, statistics, optimizer=None, utility=None, position_ids=None, pixel_values=None):
     """
     Perform an optimization to find the optimal layer set for the model based on the draft matchness.
 
@@ -821,10 +843,17 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
     with torch.inference_mode():
         with model.self_draft():
             step_end = statistics["context_window"] + 1
-            parallel_draft_output = model.model(input_ids=generate_ids[:, :step_end],
-                                                attention_mask=None,
-                                                past_key_values=input_past_key_values,
-                                                position_ids=position_ids)
+            if pixel_values is not None:
+                parallel_draft_output = model(input_ids=generate_ids[:, :step_end],
+                                                    attention_mask=None,
+                                                    past_key_values=input_past_key_values,
+                                                    position_ids=position_ids,
+                                                    pixel_values=pixel_values)
+            else:
+                parallel_draft_output = model.model(input_ids=generate_ids[:, :step_end],
+                                                    attention_mask=None,
+                                                    past_key_values=input_past_key_values,
+                                                    position_ids=position_ids)
     parallel_draft_logits = model.lm_head(parallel_draft_output[0])
     parallel_draft_output_ids = torch.argmax(parallel_draft_logits, dim=-1)
     verified_token_num = (parallel_draft_output_ids[:, :-1] == generate_ids[:, 1:step_end].to(parallel_draft_output_ids.device)).sum(-1).item()
@@ -841,6 +870,8 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
         statistics["tolerance_iter"] = 0
         if score > statistics["max_score"]:
             statistics["optimization"] = False  # stop optimization
+            new_attn_skip_layer_id_set, new_mlp_skip_layer_id_set = model.get_skip_layers()
+            logging.info("Optimized Layer Set: " + str({"attention": new_attn_skip_layer_id_set, "mlp": new_mlp_skip_layer_id_set}))
             logging.info("=" * 30 + 'Optimization Stopped because the score reaches the expected number!' + "=" * 30)
     else:
         model.set_skip_layers(origin_attn_skip_layer_id_set, origin_mlp_skip_layer_id_set)  # choose the better one
