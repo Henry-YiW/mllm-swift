@@ -29,7 +29,7 @@ def seed_everything(seed=64):
     torch.backends.cudnn.benchmark = False
 
 
-def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250, max_output_length=4096, prompt_shots=None):
+def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250, max_output_length=4096, prompt_shots=None, auto_processor=None, raw_images=None):
     end_prompt = ''
     if task_name == 'cnndm':
         inputs = tokenizer(
@@ -39,6 +39,21 @@ def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250
     elif task_name == 'humaneval':
         prompt = prompt['prompt'].replace("    ", "\t")
         inputs = tokenizer(prompt, return_tensors='pt').to("cuda")
+    elif task_name == 'llava':
+        if auto_processor:
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt['prompt']},
+                        {"type": "image"},
+                    ],
+                },
+            ]
+            prompt = auto_processor.apply_chat_template(conversation, add_generation_prompt=True)
+            inputs = auto_processor(images=raw_images, text=prompt, return_tensors='pt').to("cuda")
+        else:
+            inputs = tokenizer(prompt, return_tensors='pt').to("cuda")
     else:
         logging.info("This task is not supported.")
     end_prompt_length = len(tokenizer(end_prompt,return_tensors='pt').input_ids[0])
@@ -46,6 +61,8 @@ def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250
     if len(input_ids[0]) + max_new_tokens + tree_length >= max_output_length:
         sample_num = (len(input_ids[0]) + max_new_tokens + tree_length - max_output_length)
         input_ids = torch.cat((input_ids[0][:-(end_prompt_length+sample_num)], input_ids[0][-end_prompt_length:]), dim=0).unsqueeze(0)
+    if task_name == 'llava':
+        return input_ids, inputs.pixel_values
     return input_ids
 
 def load_data(task_name, seed,  data_num=10):
@@ -66,6 +83,8 @@ def load_data(task_name, seed,  data_num=10):
             if i >= data_num:
                 break
             data.append(original_data[task_id])
+    elif task_name == 'llava':
+        data = load_dataset('llava', name='v1.5', split='test').shuffle(seed=seed).select(range(data_num))
     else:
         logging.info("This task is not supported.")
     return data, prompt_shots
@@ -118,6 +137,8 @@ def get_model_answers(
         answer_file,
         max_new_tokens,
         task_name,
+        auto_processor,
+        raw_images,
         **kwargs,
 ):
     model.eval()
@@ -130,8 +151,9 @@ def get_model_answers(
     total_draft_num = 0
     for question in tqdm(data):
         choices = []
-        input_ids = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
-                               prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings)
+        input_ids, pixel_values = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
+                               prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings,
+                               auto_processor=auto_processor, raw_images=raw_images)
         cur_accept_lengths_tree = []
         cur_draft_num = 0
         steps = []
@@ -144,6 +166,7 @@ def get_model_answers(
             model,
             tokenizer,
             max_new_tokens,
+            pixel_values,
             **kwargs,
         )
         torch.cuda.synchronize()
