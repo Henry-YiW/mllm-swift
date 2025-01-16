@@ -6,18 +6,18 @@ import torch
 import torch.utils.checkpoint
 from torch import nn
 
-from ...activations import ACT2FN
-from ...generation import GenerationMixin
-from ...modeling_outputs import ModelOutput
-from ...modeling_utils import PreTrainedModel
-from ...utils import (
+from transformers.activations import ACT2FN
+from transformers.generation import GenerationMixin
+from transformers.modeling_outputs import ModelOutput
+from transformers.modeling_utils import PreTrainedModel
+from transformers.utils import (
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
     logging,
     replace_return_docstrings,
 )
-from ..auto import AutoModel, AutoModelForCausalLM
-from .configuration_llava import LlavaConfig
+from transformers.models.auto import AutoModel, AutoModelForCausalLM
+from transformers.models.llava.configuration_llava import LlavaConfig
 
 
 logger = logging.get_logger(__name__)
