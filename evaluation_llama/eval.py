@@ -84,7 +84,8 @@ def load_data(task_name, seed,  data_num=10):
                 break
             data.append(original_data[task_id])
     elif task_name == 'llava':
-        data = load_dataset('llava', name='v1.5', split='test').shuffle(seed=seed).select(range(data_num))
+        data = load_dataset('liuhaotian/llava-bench-in-the-wild', split='train').shuffle(seed=seed)
+        data = data.select(range(min(data_num, len(data))))
     else:
         logging.info("This task is not supported.")
     return data, prompt_shots
@@ -102,6 +103,7 @@ def run_eval(
         task_name,
         data_num,
         seed,
+        auto_processor,
         **kwargs,
 ):
     # Split the question file into `num_gpus` files
@@ -122,6 +124,7 @@ def run_eval(
         answer_file,
         max_new_tokens,
         task_name,
+        auto_processor,
         **kwargs,
     )
 
@@ -138,7 +141,6 @@ def get_model_answers(
         max_new_tokens,
         task_name,
         auto_processor,
-        raw_images,
         **kwargs,
 ):
     model.eval()
@@ -151,9 +153,16 @@ def get_model_answers(
     total_draft_num = 0
     for question in tqdm(data):
         choices = []
-        input_ids, pixel_values = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
-                               prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings,
-                               auto_processor=auto_processor, raw_images=raw_images)
+        if task_name == 'llava':
+            prompt = {'prompt': 'What are these? Please describe the image in detail.'}
+            input_ids, pixel_values = clip_input(tokenizer, prompt, task_name, max_new_tokens=max_new_tokens,
+                               prompt_shots=prompt_shots, max_output_length=model.config.text_config.max_position_embeddings,
+                               auto_processor=auto_processor, raw_images=question['image'])
+        else:
+            input_ids = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
+                               prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings)
+        print('input_ids:', tokenizer.decode(input_ids[0]))
+        print('pixel_values:', pixel_values.shape)
         cur_accept_lengths_tree = []
         cur_draft_num = 0
         steps = []
@@ -161,12 +170,13 @@ def get_model_answers(
         wall_time = []
         torch.cuda.synchronize()
         start_time = time.time()
+        print('kwargs:', kwargs)
         output_ids, new_token_num, step, accept_length_tree, draft_token_num = forward_func(
             input_ids,
             model,
             tokenizer,
             max_new_tokens,
-            pixel_values,
+            pixel_values=pixel_values,
             **kwargs,
         )
         torch.cuda.synchronize()

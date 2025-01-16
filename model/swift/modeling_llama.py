@@ -36,7 +36,7 @@ from transformers.models.llama.modeling_llama import LlamaAttention as _LlamaAtt
 from transformers.models.llama.modeling_llama import LlamaModel as _LlamaModel
 from transformers.models.llama.modeling_llama import LlamaForCausalLM as _LlamaForCausalLM
 from transformers.models.llama.modeling_llama import apply_rotary_pos_emb, repeat_kv
-from transformers.models.llama.modeling_llama import LlamaRotaryEmbedding, LlamaLinearScalingRotaryEmbedding, \
+from transformers.models.llama.modeling_llama import LlamaLinearScalingRotaryEmbedding, \
     LlamaDynamicNTKScalingRotaryEmbedding
 
 logger = logging.get_logger(__name__)
@@ -117,7 +117,48 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] 
     )
 
 
+class LlamaRotaryEmbedding(nn.Module):
+    def __init__(self, dim, max_position_embeddings=2048, base=10000, device=None):
+        super().__init__()
+
+        self.dim = dim
+        self.max_position_embeddings = max_position_embeddings
+        self.base = base
+        inv_freq = 1.0 / (self.base ** (torch.arange(0, self.dim, 2).float().to(device) / self.dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+
+        # Build here to make `torch.jit.trace` work.
+        self._set_cos_sin_cache(
+            seq_len=max_position_embeddings, device=self.inv_freq.device, dtype=torch.get_default_dtype()
+        )
+
+    def _set_cos_sin_cache(self, seq_len, device, dtype):
+        self.max_seq_len_cached = seq_len
+        t = torch.arange(self.max_seq_len_cached, device=device, dtype=self.inv_freq.dtype)
+
+        freqs = torch.outer(t, self.inv_freq)
+        # Different from paper, but it uses a different permutation in order to obtain the same calculation
+        emb = torch.cat((freqs, freqs), dim=-1)
+        self.register_buffer("cos_cached", emb.cos().to(dtype), persistent=False)
+        self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
+
+    def forward(self, x, seq_len=None):
+        # x: [bs, num_attention_heads, seq_len, head_size]
+        # print("SFJSLKDFJDSLJF 1", x.shape, seq_len, self.max_seq_len_cached)
+        # print("SFJSLKDFJDSLJF 2", self.cos_cached.shape, self.sin_cached.shape)
+        if seq_len > self.max_seq_len_cached:
+            self._set_cos_sin_cache(seq_len=seq_len, device=x.device, dtype=x.dtype)
+
+        return (
+            self.cos_cached[:seq_len].to(dtype=x.dtype),
+            self.sin_cached[:seq_len].to(dtype=x.dtype),
+        )
+
 class LlamaAttention(_LlamaAttention):
+
+    def __init__(self, config: LlamaConfig):
+        super().__init__(config)
+        self._init_rope()
 
     def _init_rope(self):
         if self.config.rope_scaling is None:
@@ -162,7 +203,10 @@ class LlamaAttention(_LlamaAttention):
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         # print("SFJSLKDFJDSLJF", self.rotary_emb, value_states, kv_seq_len)
+        # print("SFJSLKDFJDSLJF", value_states.shape, self.num_key_value_heads, self.head_dim)
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        cos, sin = cos.unsqueeze(0), sin.unsqueeze(0)
+        # print("SFJSLKDFJDSLJF 3", cos.shape, sin.shape)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
         if past_key_value is not None:

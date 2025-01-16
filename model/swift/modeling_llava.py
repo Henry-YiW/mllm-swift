@@ -17,7 +17,9 @@ from transformers.utils import (
     replace_return_docstrings,
 )
 from transformers.models.auto import AutoModel, AutoModelForCausalLM
-from transformers.models.llava.configuration_llava import LlavaConfig
+# from transformers.models.llava.configuration_llava import LlavaConfig
+from model.swift.configuration_llava import LlavaConfig
+from model.swift.modeling_llama import LlamaForCausalLM
 
 
 logger = logging.get_logger(__name__)
@@ -26,6 +28,82 @@ _CONFIG_FOR_DOC = "LlavaConfig"
 
 # Base docstring
 _CHECKPOINT_FOR_DOC = "llava-hf/llava-1.5-7b-hf"
+
+from contextlib import contextmanager
+
+enabled_draft = False
+enabled_bitfit = False
+
+# configuration
+# _attn_skip_layer_id_set = []
+# _mlp_skip_layer_id_set = []
+
+print('(Re-)Loading modeling...')
+
+# Copied from transformers.models.bart.modeling_bart._make_causal_mask
+def _make_causal_mask(
+        input_ids_shape: torch.Size,
+        dtype: torch.dtype,
+        device: torch.device,
+        past_key_values_length: int = 0,
+):
+    """
+    Create a causal mask for bi-directional self-attention.
+
+    Args:
+        input_ids_shape (torch.Size): The shape of input_ids tensor, typically (batch_size, tgt_len).
+        dtype (torch.dtype): The data type of the mask.
+        device (torch.device): The device on which the mask will be placed.
+        past_key_values_length (int, optional): The length of past key values. Default is 0.
+
+    Returns:
+        torch.Tensor: The causal mask tensor.
+    """
+    bsz, tgt_len = input_ids_shape
+    mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
+    mask_cond = torch.arange(mask.size(-1), device=device)
+    mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
+    mask = mask.to(dtype)
+
+    if past_key_values_length > 0:
+        mask = torch.cat(
+            [
+                torch.zeros(
+                    tgt_len, past_key_values_length, dtype=dtype, device=device
+                ),
+                mask,
+            ],
+            dim=-1,
+        )
+    return mask[None, None, :, :].expand(
+        bsz, 1, tgt_len, tgt_len + past_key_values_length
+    )
+
+
+# Copied from transformers.models.bart.modeling_bart._expand_mask
+def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] = None):
+    """
+    Expand attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
+
+    Args:
+        mask (torch.Tensor): The attention mask tensor of shape `[bsz, seq_len]`.
+        dtype (torch.dtype): The data type of the mask.
+        tgt_len (Optional[int], optional): The target sequence length. If None, it defaults to the source sequence length.
+
+    Returns:
+        torch.Tensor: The expanded mask tensor.
+    """
+    bsz, src_len = mask.size()
+    tgt_len = tgt_len if tgt_len is not None else src_len
+
+    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
+
+    inverted_mask = 1.0 - expanded_mask
+
+    return inverted_mask.masked_fill(
+        inverted_mask.to(torch.bool), torch.finfo(dtype).min
+    )
+
 
 
 @dataclass
@@ -223,14 +301,22 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
     _tied_weights_keys = ["lm_head.weight"]
     def __init__(self, config: LlavaConfig):
         super().__init__(config)
+        # print('LlavaForConditionalGeneration Config: ', vars(config))
         self.vision_tower = AutoModel.from_config(config.vision_config)
 
         self.multi_modal_projector = LlavaMultiModalProjector(config)
         self.vocab_size = config.text_config.vocab_size
-        self.language_model = AutoModelForCausalLM.from_config(config.text_config)
+
+        # print('LlamaForCausalLM 2: ')
+        self.language_model = LlamaForCausalLM(config.text_config)
+        
+        # print('LlamaForCausalLM 3: ')
+        if self.language_model._tied_weights_keys is not None:
+            self._tied_weights_keys = [f"language_model.{k}" for k in self.language_model._tied_weights_keys]
+
         self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
 
-
+        # print('LlamaForCausalLM 4: ')
         self.post_init()
 
     def get_input_embeddings(self):
@@ -303,6 +389,14 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         self.pretraining_tp = language_model.config.pretraining_tp
         self.vocab_size = language_model.config.vocab_size
         self.lm_head = nn.Linear(language_model.config.hidden_size, language_model.config.vocab_size, bias=False)
+
+    def init_language_model(self):
+        self.model = self.language_model.model
+
+        self.pretraining_tp = self.language_model.config.pretraining_tp
+        self.vocab_size = self.language_model.config.vocab_size
+        print('Self Device', self.device)
+        self.lm_head = nn.Linear(self.language_model.config.hidden_size, self.language_model.config.vocab_size, bias=False).to(self.device)
 
     def get_image_features(
         self, pixel_values: torch.FloatTensor, vision_feature_layer: int, vision_feature_select_strategy: str
@@ -527,8 +621,8 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
-            cache_position=cache_position,
-            num_logits_to_keep=num_logits_to_keep,
+            # cache_position=cache_position,
+            # num_logits_to_keep=num_logits_to_keep,
 
             draft_attn_skip_mask=draft_attn_skip_mask,
             draft_mlp_skip_mask=draft_mlp_skip_mask,
@@ -551,9 +645,10 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         # )
 
         hidden_states = outputs[0]
-        if self.config.pretraining_tp > 1:
-            lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.config.pretraining_tp, dim=0)
-            logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.config.pretraining_tp)]
+        print("tensor device", hidden_states.device)
+        if self.language_model.config.pretraining_tp > 1:
+            lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.language_model.config.pretraining_tp, dim=0)
+            logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.language_model.config.pretraining_tp)]
             logits = torch.cat(logits, dim=-1)
         else:
             logits = self.lm_head(hidden_states)
