@@ -9,7 +9,7 @@ from fastchat.utils import str_to_torch_dtype
 
 from evaluation_llama.eval import run_eval
 
-from transformers import AutoTokenizer, AutoProcessor
+from transformers import AutoTokenizer, AutoProcessor, LlavaProcessor
 from bayes_opt import BayesianOptimization, UtilityFunction
 
 from model.swift.utils import *
@@ -275,21 +275,21 @@ if __name__ == "__main__":
         low_cpu_mem_usage=True,
         device_map="auto" 
     )
+    # from transformers import AutoProcessor, LlavaForConditionalGeneration
+    #     processor = AutoProcessor.from_pretrained(model_id)
 
-    processor = AutoProcessor.from_pretrained(model_id)
+    # language_model_id = 'lmsys/vicuna-7b-v1.5'
+    # language_model = LlamaForCausalLM.from_pretrained(
+    #     # args.model_path,
+    #     language_model_id,
+    #     torch_dtype=str_to_torch_dtype(args.dtype),
+    #     low_cpu_mem_usage=True,
+    #     device_map="auto")
 
-    language_model_id = 'lmsys/vicuna-7b-v1.5'
-    language_model = LlamaForCausalLM.from_pretrained(
-        # args.model_path,
-        language_model_id,
-        torch_dtype=str_to_torch_dtype(args.dtype),
-        low_cpu_mem_usage=True,
-        device_map="auto")
+    # tokenizer = AutoTokenizer.from_pretrained(model_id)
+    auto_processor = LlavaProcessor.from_pretrained(model_id)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    auto_processor = AutoProcessor.from_pretrained(model_id)
-
-    model.set_language_model(language_model)
+    model.init_language_model()
 
     if args.temperature > 1e-5:
         logits_processor = prepare_logits_processor(temperature=args.temperature, top_p=args.top_p)
@@ -322,7 +322,7 @@ if __name__ == "__main__":
 
     run_eval(
         model=model,
-        tokenizer=tokenizer,
+        tokenizer=auto_processor.tokenizer,
         forward_func=swift_forward,
         model_id=args.model_id,
         answer_file=answer_file,
@@ -336,4 +336,5 @@ if __name__ == "__main__":
         utility=utility,
         statistics=statistics,
         logits_processor=logits_processor,
+        auto_processor=auto_processor,
     )
