@@ -332,6 +332,7 @@ def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key
             current_length_data=current_length_data,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
+            pixel_values=pixel_values,
         )
     return swift_logits, sample_token, top1_prob
 
@@ -365,7 +366,9 @@ def swift_verify(
                 past_key_values=past_key_values,
                 position_ids=position_ids,
                 pixel_values=pixel_values,
+                return_raw=True,
             )
+            print('Output shape', outputs[0].shape)
         else:
             outputs = model.model(
                 input_ids=input_ids,
@@ -373,7 +376,8 @@ def swift_verify(
                 past_key_values=past_key_values,
                 position_ids=position_ids,
             )
-        orig = model.lm_head(outputs[0])
+        with torch.amp.autocast('cuda'):
+            orig = model.lm_head(outputs[0])
 
     return outputs, orig
 
@@ -456,12 +460,14 @@ def swift_draft(
         for step_draft in range(max_step_draft):
             with model.self_draft():
                 if pixel_values is not None:
+                    print('draft_input_ids', input_ids)
                     draft_outputs = model(
                         input_ids=input_ids,
                         attention_mask=None,
                         past_key_values=draft_past_key_values,
                         position_ids=position_ids,
                         pixel_values=pixel_values,
+                        return_raw=True,
                     )
                 else:
                     draft_outputs = model.model(
@@ -470,7 +476,9 @@ def swift_draft(
                         past_key_values=draft_past_key_values,
                         position_ids=position_ids,
                     )
-            current_draft_logits = model.lm_head(draft_outputs[0])
+
+            with torch.amp.autocast('cuda'):
+                current_draft_logits = model.lm_head(draft_outputs[0])
             if logits_processor is not None:
                 topk_index, topk_prob, op = sample(current_draft_logits, logits_processor, k=TOPK)
                 input_ids = topk_index[:, 0].unsqueeze(0)
@@ -854,7 +862,9 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
                                                     attention_mask=None,
                                                     past_key_values=input_past_key_values,
                                                     position_ids=position_ids)
-    parallel_draft_logits = model.lm_head(parallel_draft_output[0])
+    
+    with torch.amp.autocast('cuda'):
+        parallel_draft_logits = model.lm_head(parallel_draft_output[0])
     parallel_draft_output_ids = torch.argmax(parallel_draft_logits, dim=-1)
     verified_token_num = (parallel_draft_output_ids[:, :-1] == generate_ids[:, 1:step_end].to(parallel_draft_output_ids.device)).sum(-1).item()
     drafted_token_num = generate_ids[:, 1:step_end].size(-1)
