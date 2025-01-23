@@ -161,6 +161,7 @@ def get_model_answers(
         else:
             input_ids = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
                                prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings)
+        print('input_ids_length:', input_ids.shape)
         print('input_ids:', tokenizer.decode(input_ids[0]))
         print('pixel_values:', pixel_values.shape)
         cur_accept_lengths_tree = []

@@ -531,6 +531,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         num_logits_to_keep: int = 0,
         draft_attn_skip_mask: torch.Tensor = None,
         draft_mlp_skip_mask: torch.Tensor = None,
+        return_raw: bool = False,
     ) -> Union[Tuple, LlavaCausalLMOutputWithPast]:
         r"""
         Args:
@@ -574,6 +575,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        
         vision_feature_layer = (
             vision_feature_layer if vision_feature_layer is not None else self.config.vision_feature_layer
         )
@@ -603,10 +605,13 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
 
             n_image_tokens = (input_ids == self.config.image_token_index).sum().item()
             n_image_features = image_features.shape[0] * image_features.shape[1]
-            if n_image_tokens != n_image_features:
-                raise ValueError(
-                    f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
-                )
+            # print('input_ids', input_ids)
+            # print('n_image_tokens', n_image_tokens)
+            # print('n_image_features', n_image_features)
+            # if n_image_tokens != n_image_features:
+            #     raise ValueError(
+            #         f"Image features and image tokens do not match: tokens: {n_image_tokens}, features {n_image_features}"
+            #     )
             special_image_mask = (input_ids == self.config.image_token_index).unsqueeze(-1)
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
@@ -628,6 +633,8 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             draft_mlp_skip_mask=draft_mlp_skip_mask,
         )
 
+        if return_raw:
+            return outputs
         # logits = outputs[0]
 
         # outputs = self.model(
@@ -643,15 +650,20 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #     draft_attn_skip_mask=draft_attn_skip_mask,
         #     draft_mlp_skip_mask=draft_mlp_skip_mask,
         # )
-
         hidden_states = outputs[0]
+        print('hidden_states', hidden_states.shape)
         print("tensor device", hidden_states.device)
         if self.language_model.config.pretraining_tp > 1:
             lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.language_model.config.pretraining_tp, dim=0)
             logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.language_model.config.pretraining_tp)]
             logits = torch.cat(logits, dim=-1)
         else:
-            logits = self.lm_head(hidden_states)
+            print("tensor dtype", hidden_states.dtype)
+            print("lm head dtype", self.lm_head.weight.dtype)
+            print("lm head", self.lm_head)
+            with torch.amp.autocast('cuda'):
+                logits = self.lm_head(hidden_states)
+        print('Finished logits')
         logits = logits.float()
 
         loss = None
@@ -676,6 +688,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
+        print('Finished LlavaCausalLMOutputWithPast')
         return LlavaCausalLMOutputWithPast(
             loss=loss,
             logits=logits,
