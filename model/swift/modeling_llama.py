@@ -76,7 +76,8 @@ def _make_causal_mask(
     mask_cond = torch.arange(mask.size(-1), device=device)
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
-
+    
+    print('causal mask', mask.shape, input_ids_shape)
     if past_key_values_length > 0:
         mask = torch.cat(
             [
@@ -87,9 +88,11 @@ def _make_causal_mask(
             ],
             dim=-1,
         )
-    return mask[None, None, :, :].expand(
+    result = mask[None, None, :, :].expand(
         bsz, 1, tgt_len, tgt_len + past_key_values_length
     )
+    print('result', result.shape)
+    return result
 
 
 # Copied from transformers.models.bart.modeling_bart._expand_mask
@@ -207,8 +210,8 @@ class LlamaAttention(_LlamaAttention):
         # print("SFJSLKDFJDSLJF", value_states.shape, self.num_key_value_heads, self.head_dim)
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         cos, sin = cos.unsqueeze(0), sin.unsqueeze(0)
-        print("SFJSLKDFJDSLJF 3", cos.shape, sin.shape, position_ids)
-        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, [0, position_ids])
+        print("SFJSLKDFJDSLJF 3", cos.shape, sin.shape, position_ids, position_ids[0].shape)
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, [[[0]], position_ids[0]])
 
         if past_key_value is not None:
             # reuse k, v, self_attention
@@ -415,18 +418,24 @@ class LlamaModel(_LlamaModel):
                 device=inputs_embeds.device,
                 past_key_values_length=past_key_values_length,
             )
+            print("combined_attention_mask 0", combined_attention_mask.shape)
 
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
             expanded_attn_mask = _expand_mask(
                 attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
             ).to(inputs_embeds.device)
+
+            print('expanded_attn_mask', expanded_attn_mask.shape, attention_mask.shape)
+
             combined_attention_mask = (
                 expanded_attn_mask
                 if combined_attention_mask is None
                 else expanded_attn_mask + combined_attention_mask
             )
+            print('combined_attention_mask 2', combined_attention_mask.shape)
 
+        print('enabled_draft', enabled_draft)
         if hasattr(self, "swift_mask") and self.swift_mask is not None and not enabled_draft:
             swift_mask = self.swift_mask
             swift_len = swift_mask.size(-1)
@@ -436,7 +445,7 @@ class LlamaModel(_LlamaModel):
             combined_attention_mask[:, :, -swift_len:, -swift_len:][
                 swift_mask == 0
                 ] = combined_attention_mask.min()
-
+            print('combined_attention_mask 3', combined_attention_mask.shape)
         return combined_attention_mask
 
     def forward(
@@ -607,10 +616,12 @@ class LlamaForCausalLM(_LlamaForCausalLM):
     def self_draft(self, enabled=True, *args, **kwds):
         global enabled_draft
         enabled_draft = enabled
+        # print('LlamaForCausalLM self_draft 0', enabled_draft)
         try:
             yield None
         finally:
             enabled_draft = False
+            # print('LlamaForCausalLM self_draft 0-1', enabled_draft)
 
     def set_skip_layers(
             self, attn_skip_layer_id_set=None, mlp_skip_layer_id_set=None
