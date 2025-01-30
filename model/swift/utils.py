@@ -460,7 +460,7 @@ def swift_draft(
         for step_draft in range(max_step_draft):
             with model.self_draft():
                 if pixel_values is not None:
-                    print('draft_input_ids', input_ids)
+                    print('draft_input_ids', input_ids, position_ids)
                     draft_outputs = model(
                         input_ids=input_ids,
                         attention_mask=None,
@@ -609,7 +609,7 @@ def tree_decoding(
 
     # Compute new position IDs by adding the swift position IDs to the length of the input sequence.
     position_ids = swift_position_ids + input_ids.shape[1]
-
+    print('tree_decoding position_ids', swift_position_ids, position_ids)
     # Use the model to decode the tree candidates.
     outputs, tree_logits = swift_verify(
         model,
@@ -833,18 +833,18 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
 
     # preserve original layer set
     origin_attn_skip_layer_id_set, origin_mlp_skip_layer_id_set = model.get_skip_layers()
-
-    skip_layer_num = int((model.config.num_hidden_layers - 2) * 2 * statistics["skip_ratio"])
+    print('config', model.config, model.language_model.config)
+    skip_layer_num = int((model.language_model.config.num_hidden_layers - 2) * 2 * statistics["skip_ratio"])
 
     # select new layer set
     if (statistics["opt_iter"] + 1) % statistics["bayes_interval"] == 0 and statistics["bayes"]:
         logging.info("*" * 30 + "Bayes Search!" + "*" * 30)
         next_point_to_probe, _attn_skip_layer_id_set, _mlp_skip_layer_id_set = layer_bayes_search(
-            optimizer, utility, num_skip_layers=skip_layer_num, num_hidden_layers=model.config.num_hidden_layers)
+            optimizer, utility, num_skip_layers=skip_layer_num, num_hidden_layers=model.language_model.config.num_hidden_layers)
     else:
         _attn_skip_layer_id_set, _mlp_skip_layer_id_set = layer_random_search(
-            num_skip_layers=skip_layer_num, num_hidden_layers=model.config.num_hidden_layers)
-        next_point_to_probe = get_next_point_to_probe(_attn_skip_layer_id_set, _mlp_skip_layer_id_set, model.config.num_hidden_layers)
+            num_skip_layers=skip_layer_num, num_hidden_layers=model.language_model.config.num_hidden_layers)
+        next_point_to_probe = get_next_point_to_probe(_attn_skip_layer_id_set, _mlp_skip_layer_id_set, model.language_model.config.num_hidden_layers)
     model.set_skip_layers(_attn_skip_layer_id_set, _mlp_skip_layer_id_set)
 
     # parallel drafting on previous decoded results
@@ -856,7 +856,8 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
                                                     attention_mask=None,
                                                     past_key_values=input_past_key_values,
                                                     position_ids=position_ids,
-                                                    pixel_values=pixel_values)
+                                                    pixel_values=pixel_values,
+                                                    return_raw=True)
             else:
                 parallel_draft_output = model.model(input_ids=generate_ids[:, :step_end],
                                                     attention_mask=None,
@@ -864,6 +865,7 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
                                                     position_ids=position_ids)
     
     with torch.amp.autocast('cuda'):
+        print('parallel_draft_output', parallel_draft_output[0].shape)
         parallel_draft_logits = model.lm_head(parallel_draft_output[0])
     parallel_draft_output_ids = torch.argmax(parallel_draft_logits, dim=-1)
     verified_token_num = (parallel_draft_output_ids[:, :-1] == generate_ids[:, 1:step_end].to(parallel_draft_output_ids.device)).sum(-1).item()

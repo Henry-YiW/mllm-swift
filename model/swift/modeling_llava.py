@@ -349,13 +349,15 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
 
     @contextmanager
     def self_draft(self, enabled=True, *args, **kwds):
-        self.language_model.self_draft(enabled)
         global enabled_draft
         enabled_draft = enabled
+        # print('LlavaForConditionalGeneration self_draft 0', enabled_draft)
         try:
-            yield None
+            with self.language_model.self_draft():
+                yield None
         finally:
             enabled_draft = False
+            # print('LlavaForConditionalGeneration self_draft 0-1', enabled_draft)
 
     def set_skip_layers(
             self, attn_skip_layer_id_set=None, mlp_skip_layer_id_set=None

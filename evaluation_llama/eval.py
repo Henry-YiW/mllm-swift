@@ -222,7 +222,7 @@ def get_model_answers(
     mean_accepted_tokens = np.mean(accept_lengths_tree)
     if mean_accepted_tokens > 1:
         best_attn_skip_layer_id_set, best_mlp_skip_layer_id_set = model.get_skip_layers()
-        best_skip_ratio = (len(best_mlp_skip_layer_id_set) + len(best_attn_skip_layer_id_set)) / ((model.config.num_hidden_layers - 2) * 2)
+        best_skip_ratio = (len(best_mlp_skip_layer_id_set) + len(best_attn_skip_layer_id_set)) / ((model.language_model.config.num_hidden_layers - 2) * 2)
         with open(os.path.expanduser(answer_file), "a") as fout:
             ans_json = {
                 "Mean accepted tokens": np.mean(accept_lengths_tree),
