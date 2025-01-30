@@ -653,19 +653,19 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #     draft_mlp_skip_mask=draft_mlp_skip_mask,
         # )
         hidden_states = outputs[0]
-        print('hidden_states', hidden_states.shape)
-        print("tensor device", hidden_states.device)
+        # print('hidden_states', hidden_states.shape)
+        # print("tensor device", hidden_states.device)
         if self.language_model.config.pretraining_tp > 1:
             lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.language_model.config.pretraining_tp, dim=0)
             logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.language_model.config.pretraining_tp)]
             logits = torch.cat(logits, dim=-1)
         else:
-            print("tensor dtype", hidden_states.dtype)
-            print("lm head dtype", self.lm_head.weight.dtype)
-            print("lm head", self.lm_head)
+            # print("tensor dtype", hidden_states.dtype)
+            # print("lm head dtype", self.lm_head.weight.dtype)
+            # print("lm head", self.lm_head)
             with torch.amp.autocast('cuda'):
                 logits = self.lm_head(hidden_states)
-        print('Finished logits')
+        # print('Finished logits')
         logits = logits.float()
 
         loss = None
@@ -690,7 +690,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        print('Finished LlavaCausalLMOutputWithPast')
+        # print('Finished LlavaCausalLMOutputWithPast')
         return LlavaCausalLMOutputWithPast(
             loss=loss,
             logits=logits,
