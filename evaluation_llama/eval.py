@@ -161,9 +161,9 @@ def get_model_answers(
         else:
             input_ids = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
                                prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings)
-        print('input_ids_length:', input_ids.shape)
-        print('input_ids:', tokenizer.decode(input_ids[0]))
-        print('pixel_values:', pixel_values.shape)
+        # print('input_ids_length:', input_ids.shape)
+        # print('input_ids:', tokenizer.decode(input_ids[0]))
+        # print('pixel_values:', pixel_values.shape)
         cur_accept_lengths_tree = []
         cur_draft_num = 0
         steps = []
@@ -171,7 +171,7 @@ def get_model_answers(
         wall_time = []
         torch.cuda.synchronize()
         start_time = time.time()
-        print('kwargs:', kwargs)
+        # print('kwargs:', kwargs)
         output_ids, new_token_num, step, accept_length_tree, draft_token_num = forward_func(
             input_ids,
             model,

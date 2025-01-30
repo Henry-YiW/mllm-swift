@@ -77,7 +77,7 @@ def _make_causal_mask(
     mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
     mask = mask.to(dtype)
     
-    print('causal mask', mask.shape, input_ids_shape)
+    # print('causal mask', mask.shape, input_ids_shape)
     if past_key_values_length > 0:
         mask = torch.cat(
             [
@@ -91,7 +91,7 @@ def _make_causal_mask(
     result = mask[None, None, :, :].expand(
         bsz, 1, tgt_len, tgt_len + past_key_values_length
     )
-    print('result', result.shape)
+    # print('result', result.shape)
     return result
 
 
@@ -201,34 +201,34 @@ class LlamaAttention(_LlamaAttention):
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        print('query_states', query_states.shape)
-        print('key_states', key_states.shape)
+        # print('query_states', query_states.shape)
+        # print('key_states', key_states.shape)
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
-        print("SFJSLKDFJDSLJF", self.rotary_emb, value_states.shape, kv_seq_len)
+        # print("SFJSLKDFJDSLJF", self.rotary_emb, value_states.shape, kv_seq_len)
         # print("SFJSLKDFJDSLJF", value_states.shape, self.num_key_value_heads, self.head_dim)
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         cos, sin = cos.unsqueeze(0), sin.unsqueeze(0)
-        print("SFJSLKDFJDSLJF 3", cos.shape, sin.shape, position_ids, position_ids[0].shape)
+        # print("SFJSLKDFJDSLJF 3", cos.shape, sin.shape, position_ids, position_ids[0].shape)
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, [[[0]], position_ids[0]])
 
         if past_key_value is not None:
             # reuse k, v, self_attention
-            print('past_key_value', past_key_value[0].shape, past_key_value[1].shape)
-            print('key_states_new', key_states.shape)
+            # print('past_key_value', past_key_value[0].shape, past_key_value[1].shape)
+            # print('key_states_new', key_states.shape)
             key_states = past_key_value[0].cat(key_states, dim=2)
             value_states = past_key_value[1].cat(value_states, dim=2)
 
-        print('key_states 0', key_states.shape)
+        # print('key_states 0', key_states.shape)
         past_key_value = (key_states, value_states) if use_cache else None
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
-        print('query_states', query_states.shape)
-        print('key_states', key_states.shape)
-        print('value_states', value_states.shape)
+        # print('query_states', query_states.shape)
+        # print('key_states', key_states.shape)
+        # print('value_states', value_states.shape)
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
@@ -348,7 +348,7 @@ class LlamaDecoderLayer(nn.Module):
                 present_key_value = None
             else:
                 hidden_states = self.input_layernorm(hidden_states)
-                print('hidden_states 2', hidden_states.shape)
+                # print('hidden_states 2', hidden_states.shape)
                 # Self Attention
                 hidden_states, self_attn_weights, present_key_value = self.self_attn(
                     hidden_states=hidden_states,
@@ -418,7 +418,7 @@ class LlamaModel(_LlamaModel):
                 device=inputs_embeds.device,
                 past_key_values_length=past_key_values_length,
             )
-            print("combined_attention_mask 0", combined_attention_mask.shape)
+            # print("combined_attention_mask 0", combined_attention_mask.shape)
 
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
@@ -426,26 +426,26 @@ class LlamaModel(_LlamaModel):
                 attention_mask, inputs_embeds.dtype, tgt_len=input_shape[-1]
             ).to(inputs_embeds.device)
 
-            print('expanded_attn_mask', expanded_attn_mask.shape, attention_mask.shape)
+            # print('expanded_attn_mask', expanded_attn_mask.shape, attention_mask.shape)
 
             combined_attention_mask = (
                 expanded_attn_mask
                 if combined_attention_mask is None
                 else expanded_attn_mask + combined_attention_mask
             )
-            print('combined_attention_mask 2', combined_attention_mask.shape)
+            # print('combined_attention_mask 2', combined_attention_mask.shape)
 
-        print('enabled_draft', enabled_draft)
+        # print('enabled_draft', enabled_draft)
         if hasattr(self, "swift_mask") and self.swift_mask is not None and not enabled_draft:
             swift_mask = self.swift_mask
             swift_len = swift_mask.size(-1)
-            print('combined_attention_mask', combined_attention_mask.shape)
-            print('swift_mask', swift_mask.shape)
-            print('swift_len', swift_len)
+            # print('combined_attention_mask', combined_attention_mask.shape)
+            # print('swift_mask', swift_mask.shape)
+            # print('swift_len', swift_len)
             combined_attention_mask[:, :, -swift_len:, -swift_len:][
                 swift_mask == 0
                 ] = combined_attention_mask.min()
-            print('combined_attention_mask 3', combined_attention_mask.shape)
+            # print('combined_attention_mask 3', combined_attention_mask.shape)
         return combined_attention_mask
 
     def forward(
@@ -497,7 +497,7 @@ class LlamaModel(_LlamaModel):
             )
             position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
         else:
-            print('position_ids_original', position_ids)
+            # print('position_ids_original', position_ids)
             position_ids = position_ids.view(-1, seq_length).long()
 
         if inputs_embeds is None:
@@ -551,8 +551,8 @@ class LlamaModel(_LlamaModel):
                     draft_mlp_skip_mask,
                 )
             else:
-                print('hidden_states 0', hidden_states.shape)
-                print('position_ids', position_ids)
+                # print('hidden_states 0', hidden_states.shape)
+                # print('position_ids', position_ids)
                 layer_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,
