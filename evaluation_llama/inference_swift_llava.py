@@ -287,7 +287,10 @@ if __name__ == "__main__":
     #     device_map="auto")
 
     # tokenizer = AutoTokenizer.from_pretrained(model_id)
-    auto_processor = LlavaProcessor.from_pretrained(model_id)
+    auto_processor = LlavaProcessor.from_pretrained(
+        model_id,
+        #use_fast=False  # Use the slow tokenizer
+    )
 
     model.init_language_model()
 

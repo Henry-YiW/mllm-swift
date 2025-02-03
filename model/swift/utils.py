@@ -368,7 +368,7 @@ def swift_verify(
                 pixel_values=pixel_values,
                 return_raw=True,
             )
-            print('Output shape', outputs[0].shape)
+            #print('Output shape', outputs[0].shape)
         else:
             outputs = model.model(
                 input_ids=input_ids,
@@ -460,7 +460,7 @@ def swift_draft(
         for step_draft in range(max_step_draft):
             with model.self_draft():
                 if pixel_values is not None:
-                    print('draft_input_ids', input_ids, position_ids)
+                    #print('draft_input_ids', input_ids, position_ids)
                     draft_outputs = model(
                         input_ids=input_ids,
                         attention_mask=None,
@@ -609,7 +609,7 @@ def tree_decoding(
 
     # Compute new position IDs by adding the swift position IDs to the length of the input sequence.
     position_ids = swift_position_ids + input_ids.shape[1]
-    print('tree_decoding position_ids', swift_position_ids, position_ids)
+    #print('tree_decoding position_ids', swift_position_ids, position_ids)
     # Use the model to decode the tree candidates.
     outputs, tree_logits = swift_verify(
         model,
@@ -771,6 +771,7 @@ def layer_bayes_search(optimizer, utility, num_skip_layers=34, num_hidden_layers
     next_point_to_probe = optimizer.suggest(utility)
     sorted_point = sorted(next_point_to_probe.items(), reverse=True, key=lambda item: item[1])
     skip_layer_list = [k for (k, v) in sorted_point[:num_skip_layers]]
+    print('skip_layer_list', skip_layer_list)
     attn_skip_layers = []
     mlp_skip_layers = []
     for i in range(num_hidden_layers - 2):
@@ -833,7 +834,7 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
 
     # preserve original layer set
     origin_attn_skip_layer_id_set, origin_mlp_skip_layer_id_set = model.get_skip_layers()
-    print('config', model.config, model.language_model.config)
+    #print('config', model.config, model.language_model.config)
     skip_layer_num = int((model.language_model.config.num_hidden_layers - 2) * 2 * statistics["skip_ratio"])
 
     # select new layer set
@@ -865,7 +866,7 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
                                                     position_ids=position_ids)
     
     with torch.amp.autocast('cuda'):
-        print('parallel_draft_output', parallel_draft_output[0].shape)
+        #print('parallel_draft_output', parallel_draft_output[0].shape)
         parallel_draft_logits = model.lm_head(parallel_draft_output[0])
     parallel_draft_output_ids = torch.argmax(parallel_draft_logits, dim=-1)
     verified_token_num = (parallel_draft_output_ids[:, :-1] == generate_ids[:, 1:step_end].to(parallel_draft_output_ids.device)).sum(-1).item()
