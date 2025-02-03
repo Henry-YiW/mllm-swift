@@ -39,7 +39,7 @@ torch_dtype="float16" # ["float32", "float64", "float16", "bfloat16"]
 
 # CUDA_VISIBLE_DEVICES=${GPU_DEVICES} srun python -m evaluation_llama.inference_baseline --model-path $MODEL_PATH --model-id ${MODEL_NAME} --max-new-tokens ${MAX_NEW_TOKENS} --task-name ${TASK_NAME} --data-num ${DATA_NUM} --temperature $TEMP --top-p ${TOP_P} --seed ${SEED} --dtype $torch_dtype
 
-CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=${GPU_DEVICES} srun python -m evaluation_llama.inference_swift_llava --model-path $MODEL_PATH --model-id ${MODEL_NAME} \
+CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES=${GPU_DEVICES} python -m evaluation_llama.inference_swift_llava --model-path $MODEL_PATH --model-id ${MODEL_NAME} \
   --temperature $TEMP --top-p ${TOP_P} --dtype $torch_dtype --task-name ${TASK_NAME} --data-num ${DATA_NUM} --max-new-tokens ${MAX_NEW_TOKENS} \
   --seed $SEED --context-window ${CONTEXT_WINDOW} --opt-interval ${OPT_INTERVAL} --bayes-interval ${BAYES_INTERVAL} --max-opt-iter ${MAX_OPT_ITER} \
   --max-tolerance-iter ${MAX_TOLERANCE_ITER} --max-score ${MAX_SCORE} --skip-ratio ${SKIP_RATIO} --optimization --bayes # --cache-hit
