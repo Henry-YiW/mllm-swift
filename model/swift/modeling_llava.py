@@ -634,6 +634,8 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             draft_attn_skip_mask=draft_attn_skip_mask,
             draft_mlp_skip_mask=draft_mlp_skip_mask,
         )
+        
+        #print("outputs", type(outputs))
 
         if return_raw:
             return outputs

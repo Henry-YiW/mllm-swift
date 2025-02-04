@@ -449,18 +449,29 @@ def swift_draft(
     - draft_logits (torch.Tensor): Logits associated with the draft steps.
     - top1_prob (float): Probability of the sampled token.
     """
+    # Print debug information for the past_key_values_data
+    print("len(past_key_values_data):", len(past_key_values_data))
+    print("Type of past_key_values_data:", type(past_key_values_data))
+    print("Shape of past_key_values_data[0]:", past_key_values_data[0].shape)
+    
+    # Clone the cached tensors to form a draft version.
     draft_past_key_values_data = []
     for i in range(len(past_key_values_data)):
         draft_past_key_values_data.append(past_key_values_data[i].clone())
     draft_current_length_data = current_length_data.clone()
     draft_past_key_values = clone_past_key_values(model, draft_past_key_values_data, draft_current_length_data)
 
+    # Lists to store draft outputs.
     ss_token, ss_prob, ss_op, top1_prob = [], [], [], []
+    # New list to store the generated token ids.
+    draft_generated_tokens = []
+    
+
     with torch.inference_mode():
         for step_draft in range(max_step_draft):
             with model.self_draft():
                 if pixel_values is not None:
-                    #print('draft_input_ids', input_ids, position_ids)
+                    # Run model with pixel_values.
                     draft_outputs = model(
                         input_ids=input_ids,
                         attention_mask=None,
@@ -470,6 +481,7 @@ def swift_draft(
                         return_raw=True,
                     )
                 else:
+                    # Run model without pixel_values.
                     draft_outputs = model.model(
                         input_ids=input_ids,
                         attention_mask=None,
@@ -479,23 +491,41 @@ def swift_draft(
 
             with torch.amp.autocast('cuda'):
                 current_draft_logits = model.lm_head(draft_outputs[0])
+                
             if logits_processor is not None:
                 topk_index, topk_prob, op = sample(current_draft_logits, logits_processor, k=TOPK)
+                # Update input_ids with the first entry among topK for next draft step.
                 input_ids = topk_index[:, 0].unsqueeze(0)
             else:
                 top = torch.topk(current_draft_logits, TOPK, dim=-1)
                 topk_index, topk_prob = top.indices, top.values
                 input_ids = topk_index[:, :, 0]
                 op = None
+
             ss_token.append(topk_index)
             ss_prob.append(topk_prob)
             ss_op.append(op)
+            
             origin_draft_probs = current_draft_logits.softmax(-1)
             argmax_prob = torch.gather(origin_draft_probs, -1, input_ids.unsqueeze(-1)).squeeze(-1)
+            print("argmax_prob shape:", argmax_prob.shape)
             current_threshold = argmax_prob.item()
             top1_prob.append(current_threshold)
+            
+            # Extract and store the generated token.
+            token_generated = input_ids.squeeze().item()
+            draft_generated_tokens.append(token_generated)
+            
             if current_threshold < stop_threshold or new_token_num + step_draft + 2 >= max_new_tokens:
                 break
+
+    # Print the list of all draft tokens generated during the swift draft process.
+    
+    print("Draft tokens generated:", draft_generated_tokens)
+    from transformers import LlavaProcessor
+    auto_processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+    draft_sentence = auto_processor.decode(draft_generated_tokens, skip_special_tokens=True)
+    print("Draft sentence generated:", draft_sentence)
     return (torch.cat(ss_token), torch.cat(ss_prob), ss_op), top1_prob
 
 

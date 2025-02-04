@@ -215,20 +215,21 @@ class LlamaAttention(_LlamaAttention):
 
         #print("type of past_key_value in forward", type(past_key_value))
         if past_key_value is not None:
-            print("type of past_key_value[0] in forward", type(past_key_value[0]))
-            print("past_key_value[0]", past_key_value[0].shape)
-            print("key_states type", type(key_states))
-            print("key_states", key_states.shape)
-            print("value_states type", type(value_states))
-            print("value_states", value_states.shape)
+            # print("type of past_key_value[0] in forward", type(past_key_value[0]))
+            # print("past_key_value[0]", past_key_value[0].shape)
+            # print("key_states type", type(key_states))
+            # print("key_states", key_states.shape)
+            # print("value_states type", type(value_states))
+            # print("value_states", value_states.shape)
            
             # reuse k, v, self_attention
             # print('past_key_value', past_key_value[0].shape, past_key_value[1].shape)
             # print('key_states_new', key_states.shape)
+            #print("past_key_value[0]", type(past_key_value[0]))
             key_states = past_key_value[0].cat(key_states, dim=2)
             value_states = past_key_value[1].cat(value_states, dim=2)
-            print("key_states after concat", key_states.shape)
-            print("value_states after concat", value_states.shape)
+            # print("key_states after concat", key_states.shape)
+            # print("value_states after concat", value_states.shape)
 
         # print('key_states 0', key_states.shape)
         past_key_value = (key_states, value_states) if use_cache else None
@@ -371,9 +372,9 @@ class LlamaDecoderLayer(nn.Module):
                 )
 
                 hidden_states = residual + hidden_states
-            if present_key_value is not None:
-                print("type of present_key_value[0] in llama_decoder_layer", type(present_key_value[0]))
-                print("present_key_value[0]", present_key_value[0].shape)
+            #if present_key_value is not None:
+                #print("type of present_key_value[0] in llama_decoder_layer", type(present_key_value[0]))
+                #print("present_key_value[0]", present_key_value[0].shape)
             # Fully Connected
             residual = hidden_states
 

@@ -23,7 +23,6 @@ def swift_forward(input_ids, model, tokenizer, max_new_tokens, statistics=None, 
     # Avoid modifying the input_ids in-place
     input_ids = input_ids.clone()
     accept_length_list = []
-
     # Initialize the past key and value states
     (
         past_key_values,
