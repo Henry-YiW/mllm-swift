@@ -124,6 +124,8 @@ def initialize_past_key_values(model):
         device=startdevice,
         dtype=model.dtype,
     )
+    # print("devices", devices)
+    # print("startnum", startnum)
     past_key_values_data_list.append(past_key_values_data)
     # Initialize tensor to store the current length of the cached data for all layers.
     # [IMPORTANT] It needs to be kept on CPU for quick access and updates.
