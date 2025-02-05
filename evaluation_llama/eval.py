@@ -158,6 +158,7 @@ def get_model_answers(
             input_ids, pixel_values = clip_input(tokenizer, prompt, task_name, max_new_tokens=max_new_tokens,
                                prompt_shots=prompt_shots, max_output_length=model.config.text_config.max_position_embeddings,
                                auto_processor=auto_processor, raw_images=question['image'])
+            
         else:
             input_ids = clip_input(tokenizer, question, task_name, max_new_tokens=max_new_tokens,
                                prompt_shots=prompt_shots, max_output_length=model.config.max_position_embeddings)

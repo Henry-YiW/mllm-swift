@@ -22,6 +22,9 @@ def swift_forward(input_ids, model, tokenizer, max_new_tokens, statistics=None, 
     assert input_ids.shape[0] == 1, "Only support batch size 1 for now!!"
     # Avoid modifying the input_ids in-place
     input_ids = input_ids.clone()
+    print("--------------------------------")
+    #  print("input_ids:", input_ids)
+    
     accept_length_list = []
     # Initialize the past key and value states
     (
