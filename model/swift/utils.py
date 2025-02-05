@@ -315,12 +315,24 @@ def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key
     with torch.inference_mode():
         # Pass input through the base model
         outputs, logits = swift_verify(model, input_ids, past_key_values=past_key_values, pixel_values=pixel_values)
+        
         # Obtain the logits from the full model
         if logits_processor is not None:
             last_logits = logits[:, -1]
             last_logits = logits_processor(None, last_logits)
             probabilities = torch.nn.functional.softmax(last_logits, dim=1)
             sample_token = torch.multinomial(probabilities, 1)
+            #print the confidence of the sample_token
+            print("shape of probabilities:", probabilities.shape)
+            #get the max probability
+            #verify the sum of the probabilities, whether it is 1
+            sum_prob = torch.sum(probabilities, dim=1)
+            print("sum of the probabilities:", sum_prob)
+            #get the max probability
+            max_prob = torch.max(probabilities, dim=1)
+            print("max probability:", max_prob)
+            print("confidence of the sample_token:", max_prob[0])
+            exit()
         else:
             sample_token = torch.argmax(logits[:, -1])
             sample_token = sample_token[None, None]
@@ -368,7 +380,8 @@ def swift_verify(
                 pixel_values=pixel_values,
                 return_raw=True,
             )
-            #print('Output shape', outputs[0].shape)
+            print("swift verify outputs:")
+            print('Output shape', outputs[0].shape)
         else:
             outputs = model.model(
                 input_ids=input_ids,
@@ -469,6 +482,7 @@ def swift_draft(
 
     with torch.inference_mode():
         for step_draft in range(max_step_draft):
+            print("step_draft:", step_draft)
             with model.self_draft():
                 if pixel_values is not None:
                     # Run model with pixel_values.
@@ -508,8 +522,11 @@ def swift_draft(
             
             origin_draft_probs = current_draft_logits.softmax(-1)
             argmax_prob = torch.gather(origin_draft_probs, -1, input_ids.unsqueeze(-1)).squeeze(-1)
-            print("argmax_prob shape:", argmax_prob.shape)
+            # print("argmax_prob shape:", argmax_prob.shape)
+            #confidence threshold
             current_threshold = argmax_prob.item()
+            
+            print("current_threshold:", current_threshold)
             top1_prob.append(current_threshold)
             
             # Extract and store the generated token.
