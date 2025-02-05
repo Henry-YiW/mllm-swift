@@ -66,8 +66,8 @@ def main():
     raw_image = Image.open(requests.get(image_file, stream=True).raw)
 
     # Process the inputs (both image and formatted text) into model inputs.
-    inputs = auto_processor(images=raw_image, text=prompt, return_tensors='pt')
-    input_ids = inputs["input_ids"].to("cuda:0")
+    inputs = auto_processor(images=raw_image, text=prompt, return_tensors='pt').to("cuda:0")
+    input_ids = inputs["input_ids"]
     pixel_values = inputs.get("pixel_values", None)
     if pixel_values is not None:
         pixel_values = pixel_values.to("cuda:0", torch.float16)
@@ -108,22 +108,22 @@ def main():
     # Pass input through the correct model
     # do forward pass on the correct model
     with torch.inference_mode():
-        outputs_correct = model_correct(
-                        input_ids=input_ids,
-                        attention_mask=None,
+        outputs_correct, inputs_holder = model_correct(
+                        **inputs,
                         past_key_values=None,
                         position_ids=None,
-                        pixel_values=pixel_values,
                     )
+        print("outputs_correct", len(outputs_correct[1][0]))
         #get the logits of the last token
-        logits_correct = outputs_correct.logits[:, -1, :]
+        logits_correct = outputs_correct[0][:, -1, :]
         probabilities_correct = torch.nn.functional.softmax(logits_correct, dim=-1)
         print("probabilities_correct:", probabilities_correct)
         #get the max probability
         max_prob_correct = torch.max(probabilities_correct, dim=-1)
         print("max probability_correct:", max_prob_correct)
         print("max probability_correct index:", torch.argmax(probabilities_correct, dim=-1))
-        
+        print("outputs_correct", tokenizer.decode(torch.argmax(probabilities_correct, dim=-1)))
+        print("inputs_holder", inputs_holder)
     # Additional sequential generation/testing can be added here if necessary.
 
 if __name__ == "__main__":

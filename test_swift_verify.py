@@ -66,8 +66,8 @@ def main():
     raw_image = Image.open(requests.get(image_file, stream=True).raw)
 
     # Process the inputs (both image and formatted text) into model inputs.
-    inputs = auto_processor(images=raw_image, text=prompt, return_tensors='pt')
-    input_ids = inputs["input_ids"].to("cuda:0")
+    inputs = auto_processor(images=raw_image, text=prompt, return_tensors='pt').to("cuda:0")
+    input_ids = inputs["input_ids"]
     pixel_values = inputs.get("pixel_values", None)
     if pixel_values is not None:
         pixel_values = pixel_values.to("cuda:0", torch.float16)
@@ -77,10 +77,10 @@ def main():
     #   past_key_values_data: a list of preallocated cache tensors,
     #   current_length_data: a tensor tracking the current cache length.
 
-    past_key_values, past_key_values_data, current_length_data = initialize_past_key_values(model.model)
-    model.past_key_values = past_key_values
-    model.past_key_values_data = past_key_values_data
-    model.current_length_data = current_length_data
+    # past_key_values, past_key_values_data, current_length_data = initialize_past_key_values(model.model)
+    # model.past_key_values = past_key_values
+    # model.past_key_values_data = past_key_values_data
+    # model.current_length_data = current_length_data
 
     # ----- Prepare for Swift Initialization -----
     # Get the current input length.
@@ -91,11 +91,16 @@ def main():
     reset_swift_mode(model)
     with torch.inference_mode():
         # Pass input through the base model
-        outputs, logits = swift_verify(model, input_ids, past_key_values=past_key_values, pixel_values=pixel_values)
+        # outputs, logits = swift_verify(model, input_ids, past_key_values=past_key_values, pixel_values=pixel_values)
         # print("outputs:", outputs)
         # print("logits:", logits)
-        #do softmax on logits to get probabilities of the last token    
-        probabilities = torch.nn.functional.softmax(logits[:, -1, :], dim=-1)
+        #do softmax on logits to get probabilities of the last token
+        outputs = model(**inputs,
+                        past_key_values=None,
+                        position_ids=None,
+                        )
+        
+        probabilities = torch.nn.functional.softmax(outputs[0][:, -1, :], dim=-1)
         print("probabilities:", probabilities.shape)
         #get the max probability
         max_prob = torch.max(probabilities, dim=-1)
@@ -103,6 +108,7 @@ def main():
         #get the max probability index
         max_prob_index = torch.argmax(probabilities, dim=-1)
         print("max probability index:", max_prob_index)
+        print("outputs_correct", tokenizer.decode(torch.argmax(probabilities, dim=-1)))
     # print("Top1 probability:", top1_prob)
 
     # Pass input through the correct model
