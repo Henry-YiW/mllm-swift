@@ -41,4 +41,5 @@
 
 **/results
 
-**/output_dir
+**/output_dir*.pkl
+comparison_report_*.txt
