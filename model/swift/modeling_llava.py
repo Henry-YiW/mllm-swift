@@ -21,6 +21,8 @@ from transformers.models.auto import AutoModel, AutoModelForCausalLM
 from model.swift.configuration_llava import LlavaConfig
 from model.swift.modeling_llama import LlamaForCausalLM
 
+from customlogger import log_metrics
+
 
 logger = logging.get_logger(__name__)
 
@@ -398,7 +400,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         self.pretraining_tp = self.language_model.config.pretraining_tp
         self.vocab_size = self.language_model.config.vocab_size
         print('Self Device', self.device)
-        self.lm_head = nn.Linear(self.language_model.config.hidden_size, self.language_model.config.vocab_size, bias=False).to(self.device)
+        self.lm_head = self.language_model.lm_head.to(self.device)
 
     def get_image_features(
         self, pixel_values: torch.FloatTensor, vision_feature_layer: int, vision_feature_select_strategy: str
@@ -618,7 +620,8 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
-        inputs_holder = {
+
+        log_metrics({
             "attention_mask": attention_mask,
             "position_ids": position_ids,
             "past_key_values": past_key_values,
@@ -627,10 +630,12 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             "output_attentions": output_attentions,
             "output_hidden_states": output_hidden_states,
             "return_dict": return_dict,
-            "cache_position": cache_position,
-            "num_logits_to_keep": num_logits_to_keep,
-        }
-        outputs = self.language_model.model(
+            # cache_position=cache_position,
+            # num_logits_to_keep=num_logits_to_keep,
+            "draft_attn_skip_mask": draft_attn_skip_mask,
+            "draft_mlp_skip_mask": draft_mlp_skip_mask,
+        }, "swift_version_1_llava_forwarding.pkl")
+        outputs = self.language_model(
             attention_mask=attention_mask,
             position_ids=position_ids,
             past_key_values=past_key_values,
@@ -649,7 +654,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #print("outputs", type(outputs))
 
         if return_raw:
-            return outputs,inputs_holder
+            return outputs
         # logits = outputs[0]
 
         # outputs = self.model(
@@ -665,21 +670,23 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #     draft_attn_skip_mask=draft_attn_skip_mask,
         #     draft_mlp_skip_mask=draft_mlp_skip_mask,
         # )
-        hidden_states = outputs[0]
+        # hidden_states = outputs[0]
         # print('hidden_states', hidden_states.shape)
         # print("tensor device", hidden_states.device)
-        if self.language_model.config.pretraining_tp > 1:
-            lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.language_model.config.pretraining_tp, dim=0)
-            logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.language_model.config.pretraining_tp)]
-            logits = torch.cat(logits, dim=-1)
-        else:
-            # print("tensor dtype", hidden_states.dtype)
-            # print("lm head dtype", self.lm_head.weight.dtype)
-            # print("lm head", self.lm_head)
-            with torch.amp.autocast('cuda'):
-                logits = self.lm_head(hidden_states)
-        # print('Finished logits')
-        logits = logits.float()
+        # if self.language_model.config.pretraining_tp > 1:
+        #     lm_head_slices = self.lm_head.weight.split(self.vocab_size // self.language_model.config.pretraining_tp, dim=0)
+        #     logits = [F.linear(hidden_states, lm_head_slices[i]) for i in range(self.language_model.config.pretraining_tp)]
+        #     logits = torch.cat(logits, dim=-1)
+        # else:
+        #     # print("tensor dtype", hidden_states.dtype)
+        #     # print("lm head dtype", self.lm_head.weight.dtype)
+        #     # print("lm head", self.lm_head)
+        #     with torch.amp.autocast('cuda'):
+        #         logits = self.lm_head(hidden_states)
+        # # print('Finished logits')
+        # logits = logits.float()
+
+        logits = outputs[0]
 
         loss = None
         if labels is not None:
