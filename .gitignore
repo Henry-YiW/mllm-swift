@@ -42,3 +42,5 @@
 **/results
 
 **/output_dir
+
+**/*.pkl

@@ -39,6 +39,8 @@ from transformers.models.llama.modeling_llama import apply_rotary_pos_emb, repea
 from transformers.models.llama.modeling_llama import LlamaLinearScalingRotaryEmbedding, \
     LlamaDynamicNTKScalingRotaryEmbedding
 
+from customlogger import log_metrics
+
 logger = logging.get_logger(__name__)
 
 from contextlib import contextmanager
@@ -557,6 +559,16 @@ class LlamaModel(_LlamaModel):
                     return custom_forward
 
                 hidden_states.requires_grad_(True)
+                log_metrics({
+                    "hidden_states": hidden_states,
+                    "attention_mask": attention_mask,
+                    "position_ids": position_ids,
+                    "past_key_value": past_key_value,
+                    "output_attentions": output_attentions,
+                    "use_cache": use_cache,
+                    "draft_attn_skip_mask": draft_attn_skip_mask,
+                    "draft_mlp_skip_mask": draft_mlp_skip_mask,
+                }, "swift_version_1_llama_forwarding_checkpoint.pkl")
                 layer_outputs = torch.utils.checkpoint.checkpoint(
                     create_custom_forward(decoder_layer),
                     hidden_states,
@@ -569,6 +581,16 @@ class LlamaModel(_LlamaModel):
             else:
                 # print('hidden_states 0', hidden_states.shape)
                 # print('position_ids', position_ids)
+                log_metrics({
+                    "hidden_states": hidden_states,
+                    "attention_mask": attention_mask,
+                    "position_ids": position_ids,
+                    "past_key_value": past_key_value,
+                    "output_attentions": output_attentions,
+                    "use_cache": use_cache,
+                    "draft_attn_skip_mask": draft_attn_skip_mask,
+                    "draft_mlp_skip_mask": draft_mlp_skip_mask,
+                }, "swift_version_1_llama_forwarding.pkl")
                 layer_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,

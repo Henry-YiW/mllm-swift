@@ -108,7 +108,7 @@ def main():
     # Pass input through the correct model
     # do forward pass on the correct model
     with torch.inference_mode():
-        outputs_correct, inputs_holder = model_correct(
+        outputs_correct = model_correct(
                         **inputs,
                         past_key_values=None,
                         position_ids=None,
@@ -123,7 +123,6 @@ def main():
         print("max probability_correct:", max_prob_correct)
         print("max probability_correct index:", torch.argmax(probabilities_correct, dim=-1))
         print("outputs_correct", tokenizer.decode(torch.argmax(probabilities_correct, dim=-1)))
-        print("inputs_holder", inputs_holder)
     # Additional sequential generation/testing can be added here if necessary.
 
 if __name__ == "__main__":
