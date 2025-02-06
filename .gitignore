@@ -43,3 +43,7 @@
 
 **/output_dir*.pkl
 comparison_report_*.txt
+hidden_states_list_swift_llama.pkl
+hidden_states_list_transformers_llama.pkl
+hidden_states_list_swift_llama.pkl
+hidden_states_list_transformers_llama.pkl
