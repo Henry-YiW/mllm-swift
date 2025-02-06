@@ -511,7 +511,7 @@ class LlamaModel(_LlamaModel):
             position_ids = torch.arange(
                 past_key_values_length, seq_length + past_key_values_length, dtype=torch.long, device=device
             )
-            position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
+            print("Here position_ids is None")
         else:
             # print('position_ids_original', position_ids)
             position_ids = position_ids.view(-1, seq_length).long()
@@ -528,6 +528,8 @@ class LlamaModel(_LlamaModel):
         )
 
         hidden_states = inputs_embeds
+        position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
+        #print("position_ids inside LlamaModel forward of swift", position_ids)
 
         if self.gradient_checkpointing and self.training:
             if use_cache:
@@ -541,6 +543,23 @@ class LlamaModel(_LlamaModel):
         all_self_attns = () if output_attentions else None
         next_decoder_cache = () if use_cache else None
 
+        inputs_holder = {
+            "hidden_states": hidden_states,
+            "attention_mask": attention_mask,
+            "position_ids": position_ids,
+            "past_key_values": past_key_values,
+            "output_attentions": output_attentions,
+            "use_cache": use_cache,
+            "draft_attn_skip_mask": draft_attn_skip_mask,
+            "draft_mlp_skip_mask": draft_mlp_skip_mask,
+        }
+        import pickle
+        with open('inputs_holder_swift_llama.pkl', 'wb') as f:
+            pickle.dump(inputs_holder, f)
+            print("successfully save the inpus_holder_swift_llama.pkl")
+        #use a list to store the hidden_states for debugging
+        hidden_states_list = []
+        
         for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
@@ -569,6 +588,7 @@ class LlamaModel(_LlamaModel):
             else:
                 # print('hidden_states 0', hidden_states.shape)
                 # print('position_ids', position_ids)
+                #save the inputs_holder with pickle, also include the 
                 layer_outputs = decoder_layer(
                     hidden_states,
                     attention_mask=attention_mask,
@@ -581,12 +601,19 @@ class LlamaModel(_LlamaModel):
                 )
 
             hidden_states = layer_outputs[0]
+            #debug
+            hidden_states_list.append(hidden_states)
 
             if use_cache:
                 next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
 
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
+
+        #save the hidden_states_list with pickle
+        with open('hidden_states_list_swift_llama.pkl', 'wb') as f:
+            pickle.dump(hidden_states_list, f)
+        print("successfully save the hidden_states_list_swift_llama.pkl")
 
         hidden_states = self.norm(hidden_states)
 
@@ -595,6 +622,9 @@ class LlamaModel(_LlamaModel):
             all_hidden_states += (hidden_states,)
 
         next_cache = next_decoder_cache if use_cache else None
+        
+
+        
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
         return BaseModelOutputWithPast(

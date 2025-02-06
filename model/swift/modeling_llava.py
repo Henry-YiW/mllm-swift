@@ -618,7 +618,18 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
-
+        inputs_holder = {
+            "attention_mask": attention_mask,
+            "position_ids": position_ids,
+            "past_key_values": past_key_values,
+            "inputs_embeds": inputs_embeds,
+            "use_cache": use_cache,
+            "output_attentions": output_attentions,
+            "output_hidden_states": output_hidden_states,
+            "return_dict": return_dict,
+            "cache_position": cache_position,
+            "num_logits_to_keep": num_logits_to_keep,
+        }
         outputs = self.language_model.model(
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -638,7 +649,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #print("outputs", type(outputs))
 
         if return_raw:
-            return outputs
+            return outputs,inputs_holder
         # logits = outputs[0]
 
         # outputs = self.model(
