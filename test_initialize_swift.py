@@ -34,8 +34,8 @@ def main():
         device_map={'': 'cuda:0'}  # Force the entire model onto cuda:0
     ).to("cuda:0")
     #print the skip layers of language model
-    print("_attn_skip_layer_id_set:", model.get_skip_layers())
-    print("_mlp_skip_layer_id_set:", model.get_skip_layers())
+    # print("_attn_skip_layer_id_set:", model.get_skip_layers())
+    # print("_mlp_skip_layer_id_set:", model.get_skip_layers())
     # Initialize the language model component.
     model.init_language_model()
 

@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
@@ -621,20 +620,20 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
             inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
-        log_metrics({
-            "attention_mask": attention_mask,
-            "position_ids": position_ids,
-            "past_key_values": past_key_values,
-            "inputs_embeds": inputs_embeds,
-            "use_cache": use_cache,
-            "output_attentions": output_attentions,
-            "output_hidden_states": output_hidden_states,
-            "return_dict": return_dict,
-            # cache_position=cache_position,
-            # num_logits_to_keep=num_logits_to_keep,
-            "draft_attn_skip_mask": draft_attn_skip_mask,
-            "draft_mlp_skip_mask": draft_mlp_skip_mask,
-        }, "swift_version_1_llava_forwarding.pkl")
+        # log_metrics({
+        #     "attention_mask": attention_mask,
+        #     "position_ids": position_ids,
+        #     #"past_key_values": past_key_values,
+        #     "inputs_embeds": inputs_embeds,
+        #     "use_cache": use_cache,
+        #     "output_attentions": output_attentions,
+        #     "output_hidden_states": output_hidden_states,
+        #     "return_dict": return_dict,
+        #     # cache_position=cache_position,
+        #     # num_logits_to_keep=num_logits_to_keep,
+        #     "draft_attn_skip_mask": draft_attn_skip_mask,
+        #     "draft_mlp_skip_mask": draft_mlp_skip_mask,
+        # }, "swift_version_1_llava_forwarding.pkl")
         outputs = self.language_model(
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -642,7 +641,7 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache,
             output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
+            output_hidden_states=True,
             return_dict=return_dict,
             # cache_position=cache_position,
             # num_logits_to_keep=num_logits_to_keep,
@@ -685,8 +684,26 @@ class LlavaForConditionalGeneration(LlavaPreTrainedModel, GenerationMixin):
         #         logits = self.lm_head(hidden_states)
         # # print('Finished logits')
         # logits = logits.float()
+       # If return_dict=True
+        # Get the tuple of hidden states
+            
+        # Get the tuple of hidden states
+        # print("len(outputs)",len(outputs))
+        # hidden_states = outputs[2]
 
+        # # The hidden states tuple contains:
+        # embedding_output = hidden_states[0]    # Initial embedding layer output
+        # layer_outputs = hidden_states[1:-1]    # Hidden states from intermediate layers
+        # final_output = hidden_states[-1]       # Final layer output
+
+        # # Print shapes to understand the structure
+        # print("Number of hidden state tensors:", len(hidden_states))
+        # print("Embedding output shape:", embedding_output.shape)  # (batch_size, sequence_length, hidden_size)
+        # print("Example intermediate layer shape:", layer_outputs[0].shape)  # (batch_size, sequence_length, hidden_size)
+        # print("Final layer output shape:", final_output.shape)  # (batch_size, sequence_length, hidden_size)
+        
         logits = outputs[0]
+        #print("logits shape in llavaModel", logits.shape)
 
         loss = None
         if labels is not None:

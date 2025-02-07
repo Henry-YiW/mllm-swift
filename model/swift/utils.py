@@ -6,6 +6,7 @@ import logging
 import torch
 import numpy as np
 from .kv_cache import clone_past_key_values
+from transformers import LlavaProcessor
 TOPK = 10  # topk for sparse tree
 
 from transformers.generation.logits_process import (
@@ -323,16 +324,16 @@ def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key
             probabilities = torch.nn.functional.softmax(last_logits, dim=1)
             sample_token = torch.multinomial(probabilities, 1)
             #print the confidence of the sample_token
-            print("shape of probabilities:", probabilities.shape)
+            #print("shape of probabilities:", probabilities.shape)
             #get the max probability
             #verify the sum of the probabilities, whether it is 1
             sum_prob = torch.sum(probabilities, dim=1)
-            print("sum of the probabilities:", sum_prob)
+            #print("sum of the probabilities:", sum_prob)
             #get the max probability
             max_prob = torch.max(probabilities, dim=1)
-            print("max probability:", max_prob)
-            print("confidence of the sample_token:", max_prob[0])
-            exit()
+            #print("max probability:", max_prob)
+            #print("confidence of the sample_token:", max_prob[0])
+            #exit()
         else:
             sample_token = torch.argmax(logits[:, -1])
             sample_token = sample_token[None, None]
@@ -344,7 +345,7 @@ def initialize_swift(input_ids, model, max_new_tokens, past_key_values, past_key
             current_length_data=current_length_data,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
-            pixel_values=pixel_values,
+            pixel_values=None,
         )
     return swift_logits, sample_token, top1_prob
 
@@ -378,10 +379,9 @@ def swift_verify(
                 past_key_values=past_key_values,
                 position_ids=position_ids,
                 pixel_values=pixel_values,
-                return_raw=True,
+                return_raw=False,
+                return_dict=False
             )
-            print("swift verify outputs:")
-            print('Output shape', outputs[0].shape)
         else:
             outputs = model.model(
                 input_ids=input_ids,
@@ -390,7 +390,10 @@ def swift_verify(
                 position_ids=position_ids,
             )
         with torch.amp.autocast('cuda'):
-            orig = model.lm_head(outputs[0])
+            if pixel_values is None:
+                orig = model.lm_head(outputs[0])
+            else:
+                orig = model.lm_head(outputs[2][-1])
 
     return outputs, orig
 
@@ -463,9 +466,9 @@ def swift_draft(
     - top1_prob (float): Probability of the sampled token.
     """
     # Print debug information for the past_key_values_data
-    print("len(past_key_values_data):", len(past_key_values_data))
-    print("Type of past_key_values_data:", type(past_key_values_data))
-    print("Shape of past_key_values_data[0]:", past_key_values_data[0].shape)
+    # print("len(past_key_values_data):", len(past_key_values_data))
+    # print("Type of past_key_values_data:", type(past_key_values_data))
+    # print("Shape of past_key_values_data[0]:", past_key_values_data[0].shape)
     
     # Clone the cached tensors to form a draft version.
     draft_past_key_values_data = []
@@ -504,7 +507,11 @@ def swift_draft(
                     )
 
             with torch.amp.autocast('cuda'):
-                current_draft_logits = model.lm_head(draft_outputs[0])
+                #MODEIFED here 
+                if pixel_values is None:
+                    current_draft_logits = model.lm_head(draft_outputs[0])
+                else:
+                    current_draft_logits = model.lm_head(draft_outputs[2][-1])
                 
             if logits_processor is not None:
                 topk_index, topk_prob, op = sample(current_draft_logits, logits_processor, k=TOPK)
@@ -539,7 +546,7 @@ def swift_draft(
     # Print the list of all draft tokens generated during the swift draft process.
     
     print("Draft tokens generated:", draft_generated_tokens)
-    from transformers import LlavaProcessor
+    
     auto_processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
     draft_sentence = auto_processor.decode(draft_generated_tokens, skip_special_tokens=True)
     print("Draft sentence generated:", draft_sentence)
@@ -914,7 +921,10 @@ def swift_optimization(model, output_ids, input_past_key_values_data,
     
     with torch.amp.autocast('cuda'):
         #print('parallel_draft_output', parallel_draft_output[0].shape)
-        parallel_draft_logits = model.lm_head(parallel_draft_output[0])
+        if pixel_values is None:
+            parallel_draft_logits = model.lm_head(parallel_draft_output[0])
+        else:
+            parallel_draft_logits = model.lm_head(parallel_draft_output[2][-1])
     parallel_draft_output_ids = torch.argmax(parallel_draft_logits, dim=-1)
     verified_token_num = (parallel_draft_output_ids[:, :-1] == generate_ids[:, 1:step_end].to(parallel_draft_output_ids.device)).sum(-1).item()
     drafted_token_num = generate_ids[:, 1:step_end].size(-1)

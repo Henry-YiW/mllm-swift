@@ -112,8 +112,11 @@ def main():
                         **inputs,
                         past_key_values=None,
                         position_ids=None,
+                        return_dict=False
                     )
-        print("outputs_correct", len(outputs_correct[1][0]))
+        print("outputs_correct[0]", outputs_correct[0].shape)
+        #print("hidden_states shape", outputs_correct[1][0].shape)
+        #print("outputs_correct", len(outputs_correct[1][0]))
         #get the logits of the last token
         logits_correct = outputs_correct[0][:, -1, :]
         probabilities_correct = torch.nn.functional.softmax(logits_correct, dim=-1)
