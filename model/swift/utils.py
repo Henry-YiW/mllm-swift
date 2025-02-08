@@ -485,7 +485,7 @@ def swift_draft(
 
     with torch.inference_mode():
         for step_draft in range(max_step_draft):
-            print("step_draft:", step_draft)
+            # print("step_draft:", step_draft)
             with model.self_draft():
                 if pixel_values is not None:
                     # Run model with pixel_values.
@@ -533,7 +533,7 @@ def swift_draft(
             #confidence threshold
             current_threshold = argmax_prob.item()
             
-            print("current_threshold:", current_threshold)
+            # print("current_threshold:", current_threshold)
             top1_prob.append(current_threshold)
             
             # Extract and store the generated token.
@@ -545,11 +545,11 @@ def swift_draft(
 
     # Print the list of all draft tokens generated during the swift draft process.
     
-    print("Draft tokens generated:", draft_generated_tokens)
+    # print("Draft tokens generated:", draft_generated_tokens)
     
-    auto_processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
-    draft_sentence = auto_processor.decode(draft_generated_tokens, skip_special_tokens=True)
-    print("Draft sentence generated:", draft_sentence)
+    # auto_processor = LlavaProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
+    # draft_sentence = auto_processor.decode(draft_generated_tokens, skip_special_tokens=True)
+    # print("Draft sentence generated:", draft_sentence)
     return (torch.cat(ss_token), torch.cat(ss_prob), ss_op), top1_prob
 
 
@@ -825,7 +825,7 @@ def layer_bayes_search(optimizer, utility, num_skip_layers=34, num_hidden_layers
     next_point_to_probe = optimizer.suggest(utility)
     sorted_point = sorted(next_point_to_probe.items(), reverse=True, key=lambda item: item[1])
     skip_layer_list = [k for (k, v) in sorted_point[:num_skip_layers]]
-    print('skip_layer_list', skip_layer_list)
+    # print('skip_layer_list', skip_layer_list)
     attn_skip_layers = []
     mlp_skip_layers = []
     for i in range(num_hidden_layers - 2):

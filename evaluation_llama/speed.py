@@ -10,24 +10,33 @@ def speed(jsonl_file, jsonl_file_base, datanum=10, report=True, report_sample=Tr
             json_obj = json.loads(line)
             data.append(json_obj)
 
-    speeds=[]
-    accept_lengths_list = []
-    for datapoint in data[:datanum]:
-        tokens = sum(datapoint["choices"][0]['new_tokens'])
-        times = sum(datapoint["choices"][0]['wall_time'])
-        accept_lengths_list.extend(datapoint["choices"][0]['accept_lengths'])
-        speeds.append(tokens/times)
-
-
-    data = []
+    data0 = []
     with open(jsonl_file_base, 'r', encoding='utf-8') as file:
         for line in file:
             json_obj = json.loads(line)
-            data.append(json_obj)
+            data0.append(json_obj)
+    
+
+    datanum = min(datanum, min(len(data), len(data0)))
+    print('datanum', datanum)
+    
+    speeds=[]
+    accept_lengths_list = []
+    for datapoint in data[:datanum]:
+        try:
+            tokens = sum(datapoint["choices"][0]['new_tokens'])
+            times = sum(datapoint["choices"][0]['wall_time'])
+            accept_lengths_list.extend(datapoint["choices"][0]['accept_lengths'])
+            speeds.append(tokens/times)
+        except Exception as e:
+            print('Wrong Format Datapoint', e)
+
+
+    
 
 
     speeds0=[]
-    for datapoint in data[:datanum]:
+    for datapoint in data0[:datanum]:
         tokens = sum(datapoint["choices"][0]['new_tokens'])
         times = sum(datapoint["choices"][0]['wall_time'])
         speeds0.append(tokens/times)
@@ -35,13 +44,16 @@ def speed(jsonl_file, jsonl_file_base, datanum=10, report=True, report_sample=Tr
     tokens_per_second = np.array(speeds).mean()
     tokens_per_second_baseline = np.array(speeds0).mean()
     speedup_ratio = np.array(speeds).mean()/np.array(speeds0).mean()
-
+    print('len(speeds)', len(speeds))
     if report_sample:
         for i in range(datanum):
-            print("Tokens per second: ", speeds[i])
-            print("Tokens per second for the baseline: ", speeds0[i])
-            print("Sample Speedup: {}".format(speeds[i]/speeds0[i]))
-            print("Avg Speedup: {}\n".format(np.array(speeds[:i+1]).mean()/np.array(speeds0[:i+1]).mean()))
+            try:
+                print("Tokens per second: ", speeds[i])
+                print("Tokens per second for the baseline: ", speeds0[i])
+                print("Sample Speedup: {}".format(speeds[i]/speeds0[i]))
+                print("Avg Speedup: {}\n".format(np.array(speeds[:i+1]).mean()/np.array(speeds0[:i+1]).mean()))
+            except Exception as e:
+                print('Wrong Format Datapoint Index', i)
 
     if report:
         print("="*30, "Overall: ", "="*30)

@@ -28,6 +28,10 @@ def seed_everything(seed=64):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+# def convert_to_llava_prompt_format(data):
+
+    
+#     return data
 
 def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250, max_output_length=4096, prompt_shots=None, auto_processor=None, raw_images=None):
     end_prompt = ''
@@ -43,9 +47,15 @@ def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250
         if auto_processor:
             conversation = [
                 {
+                    "role": "system",
+                    "content": [
+                        {"type": "text", "text": prompt['prompt']['system']},
+                    ],
+                },
+                {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt['prompt']},
+                        {"type": "text", "text": prompt['prompt']['user']},
                         {"type": "image"},
                     ],
                 },
@@ -85,6 +95,7 @@ def load_data(task_name, seed,  data_num=10):
             data.append(original_data[task_id])
     elif task_name == 'llava':
         data = load_dataset('liuhaotian/llava-bench-in-the-wild', split='train').shuffle(seed=seed)
+        #data = load_dataset('nlphuji/coco_ca')
         data = data.select(range(min(data_num, len(data))))
     else:
         logging.info("This task is not supported.")
@@ -154,7 +165,7 @@ def get_model_answers(
     for question in tqdm(data):
         choices = []
         if task_name == 'llava':
-            prompt = {'prompt': 'What are these? Please describe the image in detail.'}
+            prompt = {'prompt': {'system': 'A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to user\'s questions. ', 'user': 'Please describe the image in detail.'}}
             input_ids, pixel_values = clip_input(tokenizer, prompt, task_name, max_new_tokens=max_new_tokens,
                                prompt_shots=prompt_shots, max_output_length=model.config.text_config.max_position_embeddings,
                                auto_processor=auto_processor, raw_images=question['image'])
