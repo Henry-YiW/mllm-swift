@@ -78,7 +78,8 @@ def swift_forward(input_ids, model, tokenizer, max_new_tokens, statistics=None, 
             swift_buffers["swift_position_ids"],
             input_ids,
             swift_buffers["retrieve_indices"],
-            pixel_values=pixel_values,
+            #MODIFIED
+            pixel_values=None,
         )
 
         best_candidate, accept_length, sample_p = evaluate_posterior(
@@ -111,8 +112,8 @@ def swift_forward(input_ids, model, tokenizer, max_new_tokens, statistics=None, 
                 statistics,
                 optimizer=optimizer,
                 utility=utility,
-                pixel_values=pixel_values)
-
+                #pixel_values=pixel_values
+                pixel_values=None)
         # swift drafting
         swift_logits, top1_prob = swift_draft(
             model,
@@ -122,7 +123,8 @@ def swift_forward(input_ids, model, tokenizer, max_new_tokens, statistics=None, 
             current_length_data=current_length_data,
             max_new_tokens=max_new_tokens,
             logits_processor=logits_processor,
-            pixel_values=pixel_values,
+            #pixel_values=pixel_values,
+            pixel_values=None,
         )
         accept_length_tree = input_ids.shape[1] - cur_length
         cur_length = accept_length_tree + cur_length

@@ -443,7 +443,7 @@ def swift_draft(
         position_ids=None,
         max_step_draft=25,
         logits_processor=None,
-        stop_threshold=0.8,
+        stop_threshold=0.4,
         pixel_values=None,
 ):
     """
@@ -499,6 +499,7 @@ def swift_draft(
                     )
                 else:
                     # Run model without pixel_values.
+                    #print("swift_draft without pixel_values")
                     draft_outputs = model.model(
                         input_ids=input_ids,
                         attention_mask=None,
@@ -539,6 +540,8 @@ def swift_draft(
             # Extract and store the generated token.
             token_generated = input_ids.squeeze().item()
             draft_generated_tokens.append(token_generated)
+            # print("stop_threshold:", stop_threshold)
+            # print("current_threshold:", current_threshold)
             
             if current_threshold < stop_threshold or new_token_num + step_draft + 2 >= max_new_tokens:
                 break

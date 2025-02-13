@@ -32,7 +32,7 @@ MAX_OPT_ITER=1000
 MAX_TOLERANCE_ITER=300
 MAX_SCORE=0.93
 CONTEXT_WINDOW=50
-SKIP_RATIO=0
+SKIP_RATIO=0.0
 TASK_NAME="llava" # cnndm, humaneval
 
 torch_dtype="float16" # ["float32", "float64", "float16", "bfloat16"]

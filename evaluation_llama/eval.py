@@ -44,7 +44,9 @@ def clip_input(tokenizer, prompt, task_name, max_new_tokens=512, tree_length=250
         prompt = prompt['prompt'].replace("    ", "\t")
         inputs = tokenizer(prompt, return_tensors='pt').to("cuda")
     elif task_name == 'llava':
+        print("inside clip_input----------------------------")
         if auto_processor:
+            print("auto_processor is not None")
             conversation = [
                 {
                     "role": "system",

@@ -16,8 +16,8 @@
 #SBATCH -e slurm-%j.err
 #SBATCH -o slurm-%j.out
 
-MODEL_PATH=meta-llama/Llama-2-13b-hf # Llama-2-13b-hf, CodeLlama-13b-hf, Llama-2-13b-chat-hf
-MODEL_NAME=llama-2-13b # llama-2-13b, codellama-13b, llama-2-13b-chat
+MODEL_PATH=lmsys/vicuna-13b-v1.3 # meta-llama/Llama-2-13b-hf # Llama-2-13b-hf, CodeLlama-13b-hf, Llama-2-13b-chat-hf
+MODEL_NAME=vicuna-13b-v1.3 # llama-2-13b # llama-2-13b, codellama-13b, llama-2-13b-chat
 TEMP=0.2 # 0.2 for general tasks and 0.6 for code generation
 TOP_P=0.85 # 0.85 for general tasks and 0.95 for code generation
 DATA_NUM=100
